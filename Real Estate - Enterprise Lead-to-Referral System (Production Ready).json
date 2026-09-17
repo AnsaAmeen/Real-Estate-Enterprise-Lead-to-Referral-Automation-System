@@ -1,0 +1,2033 @@
+{
+  "name": "Real Estate - Enterprise Lead-to-Referral System (Production Ready)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "missed-call-intake",
+        "options": {}
+      },
+      "id": "b9a41b95-2d87-401f-92b8-084fcb74e257",
+      "name": "Intake: Missed Call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -656
+      ],
+      "webhookId": "d575bdfc-13f9-4930-86b2-a4daca98cbe9"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "website-form-intake",
+        "options": {}
+      },
+      "id": "b7c537ab-841e-4edd-a81b-1a6f93ea1803",
+      "name": "Intake: Website Form",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -496
+      ],
+      "webhookId": "d9219142-6efd-4423-b8b7-52d49bd39abb"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-intake",
+        "options": {}
+      },
+      "id": "1308b9c4-27c8-41ef-9e8d-f4e5bcccede5",
+      "name": "Intake: WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -336
+      ],
+      "webhookId": "99e15512-2f4a-44af-bc35-9408d6767bd6"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "missed_call"
+            },
+            {
+              "name": "contact",
+              "value": "={{$json[\"From\"] || \"\"}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$json[\"Body\"] || \"Missed call received\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9f877678-f6ff-4b8f-bfcf-791c368ed5a3",
+      "name": "Normalize: Missed Call Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -656
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "website_form"
+            },
+            {
+              "name": "contact",
+              "value": "={{$json[\"email\"] || $json[\"phone\"] || \"\"}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$json[\"message\"] || \"New website enquiry\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1afe5ec7-3ec5-4aa9-a7f7-6b1046436144",
+      "name": "Normalize: Website Form Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -496
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "whatsapp"
+            },
+            {
+              "name": "contact",
+              "value": "={{$json[\"from\"] || \"\"}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$json[\"text\"] ? $json[\"text\"][\"body\"] : ($json[\"body\"] || \"\") }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5ff603a9-7abd-43c2-ad3f-8eb089dee249",
+      "name": "Normalize: WhatsApp Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\n// Agar data body ke andar ho (webhook payload) to usay unpack karein\nconst item = raw.body ? raw.body : raw;\n\n// Email, Phone ya standard WhatsApp fields extract karein\nconst contact = item.contact || item.email || item.phone || item.From || item.from || '';\n\n// Message string ya nested text nikaalein\nlet messageText = '';\nif (item.text && item.text.body) {\n  messageText = item.text.body;\n} else if (typeof item.message === 'string') {\n  messageText = item.message;\n} else if (typeof item.Body === 'string') {\n  messageText = item.Body;\n} else {\n  messageText = String(item.message || item.Body || '');\n}\n\nreturn [{\n  json: {\n    contact: String(contact).trim(),\n    message: String(messageText).trim(),\n    source: raw.source || item.source || 'website_form',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "4dbb159c-2071-41d6-a61a-c6c663290522",
+      "name": "Format Lead Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -496
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o-mini",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "=You are an AI assistant analyzing real estate incoming leads. Analyze the lead message and return a valid JSON object strictly in this format: {   \"sentiment\": \"Positive\" | \"Neutral\" | \"Negative\",   \"urgency\": \"Urgent\" | \"Normal\",   \"reason\": \"short explanation\" } Urgency is \"Urgent\" only if the client mentions immediate purchase, cash ready, distress sale, or wants a call/visit today. Otherwise, mark it as \"Normal\". Do not return markdown code blocks (no ```json), return raw JSON only."
+            },
+            {
+              "content": "=={{ $('Format Lead Payload').item.json.message }}"
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "2134331e-16e2-40dc-bef0-8795b8164e2d",
+      "name": "Sentiment and Urgency Check",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -496
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPhrNVToBlos1d7v",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "=={{ JSON.parse($json.message.content).urgency }}",
+              "value2": "URGENT"
+            }
+          ]
+        }
+      },
+      "id": "fac521d7-ca49-4b89-81c6-2881b510eb69",
+      "name": "IF Urgent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        -496
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#urgent-leads",
+        "text": "=🚨 URGENT OVERRIDE: {{$('Format Lead Payload').item.json.contact}}\nMessage: {{$('Format Lead Payload').item.json.message}}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "6de29ba0-ec08-4ce9-b336-00097bcf2f9c",
+      "name": "Direct Human Alert - Urgent",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        -592
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "=You are an elite real estate sales assistant. Analyze the customer's request, their sentiment, and the available matched properties from our inventory.  Your task is to: 1. Assign a lead score: \"HOT\" (clear intent/budget/readiness), \"WARM\" (general interest/exploring), or \"COLD\" (casual/browsing). 2. Write a polite, engaging, and professional response message directly addressing their preference (e.g. mentioning the matching house in DHA). Keep it concise and suitable for SMS/WhatsApp.  Return ONLY a valid JSON object without markdown formatting: {   \"lead_score\": \"HOT\" | \"WARM\" | \"COLD\",   \"reply_message\": \"Drafted text response here...\",   \"reasoning\": \"Short justification\" }"
+            },
+            {
+              "content": "=Customer Message: {{ $('Format Lead Payload').item.json.message }}\nContact: {{ $('Format Lead Payload').item.json.contact }}\nMatched Property: {{ $json.fields.Address }}, Bedrooms: {{ $json.fields.Bedrooms }}, Price: {{ $json.fields.Price }}"
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "2bf25655-6f06-4a98-8330-a8fc0ee9a009",
+      "name": "AI Lead Scoring Agent",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        -400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPhrNVToBlos1d7v",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ JSON.parse($json.message.content).lead_score }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "HOT"
+            },
+            {
+              "value2": "WARM",
+              "output": 1
+            },
+            {
+              "value2": "COLD",
+              "output": 2
+            }
+          ]
+        }
+      },
+      "id": "90096d5b-bfa1-42f5-990c-2679f14562c6",
+      "name": "Switch: Route by Score",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -400
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. AI Scoring Agent ka JSON parse karein\nconst aiOutput = JSON.parse($('AI Lead Scoring Agent').item.json.message.content);\n\n// 2. Customer contact aur message lein\nconst contact = $('Format Lead Payload').item.json.contact;\nconst customerMessage = ($('Format Lead Payload').item.json.message || '').toLowerCase();\n\n// 3. Agent Roster se fetched agents nikalain (fields ke andar se)\nconst agents = $('Get Agent Roster').all().map(a => a.json.fields || a.json);\n\n// 4. Territory match karein (e.g. DHA)\nlet assigned = agents.find(a => a.Territory && customerMessage.includes(a.Territory.toLowerCase()));\n\n// Agar territory match na ho to pehla available agent assign karein\nif (!assigned && agents.length > 0) {\n  assigned = agents[0];\n}\n\nconst agentName = assigned ? assigned.Name : 'General Team';\nconst agentPhone = assigned ? assigned.Phone : '';\n\nreturn [{\n  json: {\n    contact,\n    customerMessage,\n    leadScore: aiOutput.lead_score,\n    replyMessage: aiOutput.reply_message,\n    assignedAgent: agentName,\n    agentPhone: agentPhone,\n    matchReason: aiOutput.reasoning\n  }\n}];"
+      },
+      "id": "2ae7e689-40f5-4e16-a885-5c58b2d7939a",
+      "name": "Match Lead to Agent by Territory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "7350b6aa-a383-4ba0-8d18-35cff216caf3",
+      "name": "Send Hot Lead Link SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2592,
+        -688
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "slack-practice",
+        "text": "=🔥 *HOT LEAD ASSIGNED*\n*Agent:* {{ $json.assignedAgent }} ({{ $json.agentPhone }})\n*Contact:* {{ $json.contact }}\n*Customer Message:* {{ $json.customerMessage }}\n*AI Reason:* {{ $json.matchReason }}\n*Suggested Reply:* {{ $json.replyMessage }}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "8067ee1a-79e6-4235-9b28-5d22b0aeb678",
+      "name": "Notify Matched Agent Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        -480
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "unit": "days"
+      },
+      "id": "e427baaa-bea6-4ac1-b4f4-311cead0fbea",
+      "name": "Wait 1 Day",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        -352
+      ],
+      "webhookId": "806c15b2-e524-453f-a99f-675b034c7baa"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "bdd94c24-6d33-496a-a1c3-c915abca2d2c",
+      "name": "Nurture Message 1",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        -352
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "days"
+      },
+      "id": "30d00408-7415-4c66-badb-4b470e83b89b",
+      "name": "Wait 3 More Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        -240
+      ],
+      "webhookId": "f6e98391-b087-4b8a-9105-517c420fc763"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "24af5626-e27f-4794-9cd5-15e73c50d30e",
+      "name": "Nurture Message 2",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        -240
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "11a2d43f-8d8c-402c-9438-e8aaac0f0325",
+      "name": "Daily Trigger: Appointment Checks",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "update",
+        "application": {
+          "__rl": true,
+          "value": "=appsNn1aR8ocIBSAU",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblGsAnVzLuv21VPQ",
+          "mode": "id"
+        },
+        "id": "={{$json[\"id\"]}}",
+        "updateAllFields": false,
+        "options": {}
+      },
+      "id": "54819d42-256f-4e96-a2b7-4ffed68c7f27",
+      "name": "Flag No-show Status",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        368,
+        96
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "feedback-reply-webhook",
+        "options": {}
+      },
+      "id": "c76470fb-1e6b-4503-aa5f-9882d198131e",
+      "name": "Incoming Feedback Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        448
+      ],
+      "webhookId": "603451f9-4dc6-40dc-9ef6-95dc34dec99b"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o-mini",
+        "prompt": {
+          "messages": [
+            {
+              "role": "=system",
+              "content": "=You are an AI assistant analyzing real estate customer feedback. Analyze the text and classify the sentiment into exactly one of these labels: \"Interested\" or \"Not Interested\". Output only the label."
+            },
+            {
+              "content": "={{ $json.body.feedback_text }}"
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "0f26edd5-d13a-4ed9-b310-6c7390c5a7d0",
+      "name": "AI Feedback Sentiment Analysis",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        128,
+        448
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPhrNVToBlos1d7v",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message.content.trim() }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "Interested"
+            },
+            {
+              "value2": "Not Interested",
+              "output": 1
+            }
+          ]
+        }
+      },
+      "id": "7343ef08-597b-4b0f-9eee-510ffdb6a38f",
+      "name": "Switch: Feedback Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        368,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "#slack-practice",
+        "text": "=🔥 *HOT LEAD: OFFER STAGE ALERT*\n\nCustomer Phone: {{ $('Incoming Feedback Reply Webhook').item.json.body.lead_phone }}\nFeedback: {{ $('Incoming Feedback Reply Webhook').item.json.body.feedback_text }}\n*AI Sentiment:* {{ $json.message.content }}\n\nAction: The client is interested! Please follow up immediately to prepare the offer paperwork.",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "e42b2d85-2261-4e85-97b8-71cd0fb961fe",
+      "name": "Alert Agent: Offer Stage",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        608,
+        384
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "list",
+        "application": {
+          "__rl": true,
+          "value": "appsNn1aR8oclBSAU",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "id"
+        },
+        "additionalOptions": {
+          "filterByFormula": "={Contact} = '{{ $('Incoming Feedback Reply Webhook').item.json.body.lead_phone }}'"
+        }
+      },
+      "id": "2a2e0175-8a7b-41fd-ab34-c2dbdf07abec",
+      "name": "Find Lead Record for Nurture",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        608,
+        528
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "update",
+        "application": {
+          "__rl": true,
+          "value": "appsNn1aR8oclBSAU",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "id"
+        },
+        "id": "={{ $json.id }}",
+        "options": {}
+      },
+      "id": "6d5513a5-ee93-49fd-b959-0cf17a7e89c3",
+      "name": "Move to Long-term Nurture",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        832,
+        512
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "authentication": "airtableTokenApi",
+        "baseId": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "id"
+        },
+        "tableId": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "id"
+        },
+        "triggerField": "Status",
+        "additionalFields": {}
+      },
+      "id": "9f9f3de3-1a99-4cc0-9e7c-d26863da6a60",
+      "name": "Airtable Trigger: Deal Marked Closed",
+      "type": "n8n-nodes-base.airtableTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        672
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"fields\"][\"Status\"]}}",
+              "value2": "Closed"
+            }
+          ]
+        }
+      },
+      "id": "14131cea-6fe6-4865-bc44-1d8e6cb21b65",
+      "name": "Check Status is Closed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        128,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 21,
+        "unit": "seconds"
+      },
+      "id": "db1fe4dd-5c16-4ac0-b3fc-165be8eace50",
+      "name": "Wait 3 Weeks",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        592,
+        672
+      ],
+      "webhookId": "e59342c4-8d26-40d1-b1d5-c9d3a22529cc"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "563d3ecf-2c16-4cb8-8a5d-b93b96d68423",
+      "name": "Weekly Trigger (Monday 8am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "=You are an executive assistant for a real estate agency. Write a concise, professional weekly performance summary based on the provided leads data. Include total leads processed, active leads, and closed deals."
+            },
+            {
+              "content": "=Here is this week's leads data: {{ JSON.stringify($('Search records2').all().map(item => item.json.fields)) }}"
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "9e4361b3-0590-4841-9e24-8ca15a09d746",
+      "name": "Generate Weekly Summary",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        368,
+        848
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPhrNVToBlos1d7v",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "#slack-practice",
+        "text": "=📊 WEEKLY PERFORMANCE REPORT\n\n{{ $json.message.content }}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "77323912-4d99-49d4-8c3b-97c3f15b831f",
+      "name": "Send Weekly Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        592,
+        848
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "04fc16bd-53e3-4382-a088-8ff76a351e79",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "#slack-practice",
+        "text": "=🚨 *WORKFLOW ERROR ALERT*\n\n*Workflow Name:* {{ $json.workflow.name }}\n*Failed Node:* {{ $json.execution.lastNodeExecuted }}\n*Error Message:* {{ $json.execution.error.message }}\n*Execution ID:* {{ $json.execution.id }}\n*Execution URL:* {{ $json.execution.url }}\n\nPlease inspect the n8n logs immediately.",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "6ea6b8d9-7c4e-424a-a4f2-5c5011b03fb3",
+      "name": "Alert on Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        128,
+        1024
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblOVZUIsyiHiMaSQ",
+          "mode": "list",
+          "cachedResultName": "Conversation History",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblOVZUIsyiHiMaSQ"
+        },
+        "filterByFormula": "=={Contact} = '{{ $('Format Lead Payload').item.json.contact }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        -496
+      ],
+      "id": "a17ed06e-83f8-4324-97dd-5b6c2878bf63",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblOVZUIsyiHiMaSQ",
+          "mode": "list",
+          "cachedResultName": "Conversation History",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblOVZUIsyiHiMaSQ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact": "={{ $('Format Lead Payload').item.json.contact }}",
+            "Message": "={{ $('Format Lead Payload').item.json.message }}",
+            "Timestamp": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Contact",
+              "displayName": "Contact",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        -496
+      ],
+      "id": "af92e7ce-5fe1-431c-8544-85c04735d1c6",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblfA5B2b5jVA9cxQ",
+          "mode": "list",
+          "cachedResultName": "Property Inventory",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblfA5B2b5jVA9cxQ"
+        },
+        "filterByFormula": "={Status} = 'Available'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        -400
+      ],
+      "id": "ba3bf0fe-d5b1-4d2a-95d9-991a8829a942",
+      "name": "Search Property Inventory",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblWufyEDw1hg0CSS",
+          "mode": "list",
+          "cachedResultName": "Agent Roster",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblWufyEDw1hg0CSS"
+        },
+        "filterByFormula": "={Status} = 'Available'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        -560
+      ],
+      "id": "86464f5b-5ae6-4140-bc61-853d5ae8cc1a",
+      "name": "Get Agent Roster",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "list",
+          "cachedResultName": "All Leads Master Log",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblbtpcxkl2HYroUJ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact": "={{ $('Format Lead Payload').item.json.contact }}",
+            "Source": "={{ $('Format Lead Payload').item.json.source || 'Website' }}",
+            "Score": "={{ JSON.parse($('AI Lead Scoring Agent').item.json.message.content).lead_score }}",
+            "Summary": "={{ $('Format Lead Payload').item.json.message }} - AI: {{ JSON.parse($('AI Lead Scoring Agent').item.json.message.content).reasoning }}",
+            "Status": "Active",
+            "Date": "={{ $now.format('yyyy-MM-dd') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Contact",
+              "displayName": "Contact",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "HOT",
+                  "value": "HOT"
+                },
+                {
+                  "name": "WARM",
+                  "value": "WARM"
+                },
+                {
+                  "name": "COLD",
+                  "value": "COLD"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Active",
+                  "value": "Active"
+                },
+                {
+                  "name": "Long-term Nurture",
+                  "value": "Long-term Nurture"
+                },
+                {
+                  "name": "Closed",
+                  "value": "Closed"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1936,
+        -96
+      ],
+      "id": "fbe67ecc-5a12-4e5f-a7b6-0160277b2e49",
+      "name": "Log All Leads (Master)",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "append",
+        "application": {
+          "__rl": true,
+          "value": "=appsNn1aR8oclBSAU",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "id"
+        },
+        "addAllFields": false,
+        "fields": [
+          "={{ $('Format Lead Payload').item.json.contact }}",
+          "=COLD",
+          "Closed"
+        ],
+        "options": {}
+      },
+      "id": "a56c7e24-d352-4840-bffa-5f86e5e7bbe3",
+      "name": "Log Cold Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        2176,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblGsAnVzLuv21VPQ",
+          "mode": "list",
+          "cachedResultName": "Bookings",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblGsAnVzLuv21VPQ"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        -96
+      ],
+      "id": "fbe56e3e-cd5a-49d1-9927-02d086ae4e29",
+      "name": "Search records1",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ATNKWJQLT",
+          "mode": "list",
+          "cachedResultName": "slack-practice"
+        },
+        "text": "=⏰ *UPCOMING VIEWING REMINDER* *Customer Contact:* {{ $json.fields.Contact }} *Date:* {{ $json.fields['Viewing Date'] }} *Status:* {{ $json.fields.Status }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        336,
+        -96
+      ],
+      "id": "8c9f353f-01f7-4b42-a204-e54e9f8913e2",
+      "name": "Send a message",
+      "webhookId": "99133491-e69a-4cd9-a800-e24bd8590883",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblGsAnVzLuv21VPQ",
+          "mode": "list",
+          "cachedResultName": "Bookings",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblGsAnVzLuv21VPQ"
+        },
+        "filterByFormula": "={Status} = 'No-show'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        96
+      ],
+      "id": "ff9c5831-7dfa-408a-9d87-a8640222a9d8",
+      "name": "Get Yesterday's Unconfirmed Viewings",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ATNKWJQLT",
+          "mode": "list",
+          "cachedResultName": "slack-practice"
+        },
+        "text": "=:warning: *NO-SHOW / REBOOKING ALERT*\n\n*Customer Contact:* {{ $('Get Yesterday\\'s Unconfirmed Viewings').item.json.fields.Contact }}\n*Previous Date:* {{ $('Get Yesterday\\'s Unconfirmed Viewings').item.json.fields['Viewing Date'] }}\n*Status:* Marked as No-show in Bookings table.\n\nPlease contact the customer to reschedule..",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        592,
+        96
+      ],
+      "id": "f1e81405-8427-468f-881e-a9ca5c7189a2",
+      "name": "Send a message1",
+      "webhookId": "d4c12fc6-51b0-4a5c-a389-38b267062adf",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblGsAnVzLuv21VPQ",
+          "mode": "list",
+          "cachedResultName": "Bookings",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblGsAnVzLuv21VPQ"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        272
+      ],
+      "id": "72890d54-e23e-4cb5-9459-067cbb00d5de",
+      "name": "Get Completed Viewings from Yesterday",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ATNKWJQLT",
+          "mode": "list",
+          "cachedResultName": "slack-practice"
+        },
+        "text": "=📝 *FEEDBACK REQUEST TASK*\n*Customer Contact:*\n{{ $('Get Completed Viewings from Yesterday').item.json.fields.Contact }} \n*Viewing Date:*\n{{ $('Get Completed Viewings from Yesterday').item.json.fields['Viewing Date'] }} \n\n*Status:*\nViewing Completed.  \nPlease reach out to collect viewing feedback and property interest.",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        352,
+        272
+      ],
+      "id": "a455808d-1876-42b2-adb3-26d238183464",
+      "name": "Send a message2",
+      "webhookId": "86ddb2b4-6089-46ce-8025-c2e90ce42f45",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ATNKWJQLT",
+          "mode": "list",
+          "cachedResultName": "slack-practice"
+        },
+        "text": "=🎉DEAL CLOSED CELEBRATION\nClient: {{ $('Airtable Trigger: Deal Marked Closed').item.json.fields.Contact }}\nSummary: {{ $('Airtable Trigger: Deal Marked Closed').item.json.fields.Summary }}\n\nStatus: Successfully Closed!  \nAutomated Thank You sent. 3-week referral countdown initiated.",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        384,
+        656
+      ],
+      "id": "371d5149-d9bd-41df-964d-7b1db3881d6f",
+      "name": "Send Thank You SMS",
+      "webhookId": "66e1809b-3187-4efe-9cad-7a1b53e28b1f",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ATNKWJQLT",
+          "mode": "list",
+          "cachedResultName": "slack-practice"
+        },
+        "text": "=REFERRAL FOLLOW-UP ALERT  \nClient: {{ $('Airtable Trigger: Deal Marked Closed').item.json.fields.Contact }}\nPost-closing period completed. Please reach out to the client for a review and referral!",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        816,
+        672
+      ],
+      "id": "3f845f3f-5060-473d-982d-60c276f71ebc",
+      "name": "Send a message3",
+      "webhookId": "25ccefeb-5ab7-4c60-abaf-884e5527387a",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "PAMM6lBPT2JEpN2F",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appsNn1aR8ocIBSAU",
+          "mode": "list",
+          "cachedResultName": "Real Estate CRM",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblbtpcxkl2HYroUJ",
+          "mode": "list",
+          "cachedResultName": "All Leads Master Log",
+          "cachedResultUrl": "https://airtable.com/appsNn1aR8ocIBSAU/tblbtpcxkl2HYroUJ"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        848
+      ],
+      "id": "53ae5e32-0092-4ce6-a174-767fab18ce00",
+      "name": "Search records2",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "gIkR4UZhF9horjWV",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Intake: Missed Call": [
+      {
+        "json": {
+          "headers": {
+            "host": "folog76817.app.n8n.cloud",
+            "user-agent": "PostmanRuntime/2.6.0",
+            "content-length": "78",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cache-control": "no-cache",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "34.232.9.233",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a3a9f781dd6dd679-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "postman-token": "e874d2fe-bbcc-4f79-aee6-74810d6b4606",
+            "x-forwarded-for": "34.232.9.233, 162.158.79.128",
+            "x-forwarded-host": "folog76817.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-44-74757dc4f8-xfr4b",
+            "x-is-trusted": "yes",
+            "x-real-ip": "34.232.9.233"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "From": "+923001234567",
+            "Body": "Interested in 3-bed house in DHA"
+          },
+          "webhookUrl": "https://folog76817.app.n8n.cloud/webhook-test/missed-call-intake",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Intake: Website Form": [
+      {
+        "json": {
+          "headers": {
+            "host": "folog76817.app.n8n.cloud",
+            "user-agent": "PostmanRuntime/2.6.0",
+            "content-length": "153",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cache-control": "no-cache",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "34.232.9.233",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a3aa0d4caebdbe47-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "postman-token": "4efb24ea-8164-441c-9624-4b3517648701",
+            "x-forwarded-for": "34.232.9.233, 104.22.93.4",
+            "x-forwarded-host": "folog76817.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-44-74757dc4f8-bjrsm",
+            "x-is-trusted": "yes",
+            "x-real-ip": "34.232.9.233"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "email": "client@example.com",
+            "phone": "+923009876543",
+            "message": "I want to buy a 4-bedroom house in Lahore under 80M. Budget is ready."
+          },
+          "webhookUrl": "https://folog76817.app.n8n.cloud/webhook-test/website-form-intake",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Intake: WhatsApp": [
+      {
+        "json": {
+          "headers": {
+            "host": "folog76817.app.n8n.cloud",
+            "user-agent": "PostmanRuntime/2.6.0",
+            "content-length": "127",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cache-control": "no-cache",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "34.232.9.233",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a3aa1267fd2ca5ba-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "postman-token": "11e6b510-f78a-4b1b-b0b9-4a5908e415d6",
+            "x-forwarded-for": "34.232.9.233, 104.23.213.48",
+            "x-forwarded-host": "folog76817.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-44-74757dc4f8-xfr4b",
+            "x-is-trusted": "yes",
+            "x-real-ip": "34.232.9.233"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "from": "+923211234567",
+            "text": {
+              "body": "Hi, is the commercial plot on Main Boulevard still available?"
+            }
+          },
+          "webhookUrl": "https://folog76817.app.n8n.cloud/webhook-test/whatsapp-intake",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Intake: Missed Call": {
+      "main": [
+        [
+          {
+            "node": "Normalize: Missed Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intake: Website Form": {
+      "main": [
+        [
+          {
+            "node": "Normalize: Website Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intake: WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Normalize: WhatsApp Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize: Missed Call Data": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize: Website Form Data": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize: WhatsApp Data": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Lead Payload": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment and Urgency Check": {
+      "main": [
+        [
+          {
+            "node": "IF Urgent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Urgent": {
+      "main": [
+        [
+          {
+            "node": "Direct Human Alert - Urgent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Property Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Lead Scoring Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch: Route by Score",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log All Leads (Master)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: Route by Score": {
+      "main": [
+        [
+          {
+            "node": "Get Agent Roster",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 1 Day",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Cold Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Lead to Agent by Territory": {
+      "main": [
+        [
+          {
+            "node": "Send Hot Lead Link SMS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Matched Agent Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1 Day": {
+      "main": [
+        [
+          {
+            "node": "Nurture Message 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nurture Message 1": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 More Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 More Days": {
+      "main": [
+        [
+          {
+            "node": "Nurture Message 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Trigger: Appointment Checks": {
+      "main": [
+        [
+          {
+            "node": "Search records1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Yesterday's Unconfirmed Viewings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Completed Viewings from Yesterday",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag No-show Status": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming Feedback Reply Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Feedback Sentiment Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Feedback Sentiment Analysis": {
+      "main": [
+        [
+          {
+            "node": "Switch: Feedback Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: Feedback Result": {
+      "main": [
+        [
+          {
+            "node": "Alert Agent: Offer Stage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Lead Record for Nurture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Lead Record for Nurture": {
+      "main": [
+        [
+          {
+            "node": "Move to Long-term Nurture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Trigger: Deal Marked Closed": {
+      "main": [
+        [
+          {
+            "node": "Check Status is Closed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status is Closed": {
+      "main": [
+        [
+          {
+            "node": "Send Thank You SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 Weeks": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Trigger (Monday 8am)": {
+      "main": [
+        [
+          {
+            "node": "Search records2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert on Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "Sentiment and Urgency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Property Inventory": {
+      "main": [
+        [
+          {
+            "node": "AI Lead Scoring Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Agent Roster": {
+      "main": [
+        [
+          {
+            "node": "Match Lead to Agent by Territory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Yesterday's Unconfirmed Viewings": {
+      "main": [
+        [
+          {
+            "node": "Flag No-show Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Completed Viewings from Yesterday": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Thank You SMS": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 Weeks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records2": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "56b5fb48-4e67-43b0-8eab-7ca67d8741c1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d7a31fe641e50a06b2cbf957357931e84572d6223605213eb7af7a8007d75eb0"
+  },
+  "nodeGroups": [],
+  "id": "iP4ahBE1d5iU5oPH",
+  "tags": []
+}
