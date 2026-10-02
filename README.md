@@ -84,7 +84,11 @@ real-estate-enterprise-system/
     └── ADVANCED-SYSTEM-DOCUMENTATION.md
 ```
 https://github.com/AnsaAmeen/Real-Estate-Enterprise-Lead-to-Referral-Automation-System/blob/main/Real-estate-Enterprise-Lead-to-Referral-Automation-System.png
+
 https://github.com/AnsaAmeen/Real-Estate-Enterprise-Lead-to-Referral-Automation-System/blob/main/Real-Estate-CRM.png
+
+Video link
+https://drive.google.com/file/d/1nznbB5ggZ_Y145KlBxvXaIhTIPe2BOqu/view?usp=drive_link
 ---
 
 ## Tools and Platforms Used
